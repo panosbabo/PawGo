@@ -1,14 +1,14 @@
 import 'package:background_location/background_location.dart';
 import 'package:flutter_osm_plugin/flutter_osm_plugin.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:pawgo/assets/custom_colors.dart';
 import 'package:pawgo/models/loggedUser.dart';
 import 'package:pawgo/utils/mobile_library.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:persistent_bottom_nav_bar/persistent-tab-view.dart';
-import 'package:pawgo/services/mongodb_service.dart';
 import 'package:location/location.dart' as loc;
 
-import '../assets/custom_colors.dart';
+import '../models/loggedUser.dart';
+import '../utils/mobile_library.dart';
 
 extension LocationDataExt on loc.LocationData {
   GeoPoint toGeoPoint() {
@@ -44,16 +44,15 @@ class MapPage extends StatefulWidget {
 class _MapPageState extends State<MapPage>
     with OSMMixinObserver, WidgetsBindingObserver {
   final MapController controller = MapController(initMapWithUserPosition: true);
+  double totalElevation = 0;
   bool _hasPermissions = false;
   bool _isRecording = false;
   bool _shouldInitialize = true;
-  Color _currentButtonColor = CustomColors.pawrange;
-  FaIcon _currentButtonIcon = FaIcon(FontAwesomeIcons.dog);
+  FaIcon loca_icon = FaIcon(FontAwesomeIcons.dog);
   List<GeoPoint> path = [];
-  RoadInfo? _roadInfo;
+  List<double> elevations = [];
   OSMFlutter? map;
   Location? currentLocation;
-  Stopwatch _stopwatch = Stopwatch();
 
   @override
   Future<void> mapIsReady(bool isReady) async {
@@ -68,58 +67,21 @@ class _MapPageState extends State<MapPage>
           controller.removeMarker(currentLocation!.toGeoPoint());
           currentLocation = location;
           controller.changeLocation(location.toGeoPoint());
-          if (_isRecording) {
-            controller.removeMarker(path.last);
-            parseLocation(location);
-            controller.addMarker(path.last,
-                markerIcon:
-                MarkerIcon(image: AssetImage('lib/assets/app_icon.png')));
-            if (path.length > 2) {
-              controller.removeLastRoad();
-              _roadInfo = await controller.drawRoad(path.first, path.last,
-                  intersectPoint: path.sublist(1, path.length - 1),
-                  roadType: RoadType.foot,
-                  roadOption: RoadOption(
-                    roadWidth: 10,
-                    roadColor: CustomColors.pawrange,
-                  ));
-            }
-          }
-          // setState(() {});
         });
         setState(() {
-          _shouldInitialize = false;
+          _shouldInitialize = true;
         });
       }
       controller.setZoom(stepZoom: 10.0);
-      //controller.zoomIn();
     }
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) async {
-    if (state == AppLifecycleState.resumed) {
-      if (await Permission.locationAlways.isGranted)
-        setState(() {
-          _hasPermissions = true;
-        });
-      else
-        setState(() {
-          _hasPermissions = false;
-        });
-    }
-    super.didChangeAppLifecycleState(state);
   }
 
   void getLocationPermission() async {
-    var status = Permission.locationWhenInUse.request();
-    if (await status.isGranted) {
-      var status = Permission.locationAlways.request();
+    var status = Permission.locationAlways.request();
       if (await status.isGranted)
         setState(() {
           _hasPermissions = true;
         });
-    }
   }
 
   void parseLocation(Location location) {
@@ -131,6 +93,10 @@ class _MapPageState extends State<MapPage>
         path.add(GeoPoint(
             latitude: location.latitude!, longitude: location.longitude!));
         double newAltitude = location.altitude!;
+        if (newAltitude > elevations.last) {
+          totalElevation = (totalElevation + (newAltitude - elevations.last));
+          elevations.add(newAltitude);
+        }
         setState(() {});
       }
     }
@@ -150,17 +116,6 @@ class _MapPageState extends State<MapPage>
     controller.dispose();
     WidgetsBinding.instance?.removeObserver(this);
     super.dispose();
-  }
-
-  List<GeoPoint> convertPathList(List<GeoPoint> path) {
-    List<GeoPoint> listToReturn = [];
-
-    for (var point in path) {
-      listToReturn.add(GeoPoint(
-          latitude: point.latitude, longitude: point.longitude));
-    }
-
-    return listToReturn;
   }
 
   @override
@@ -214,29 +169,19 @@ class _MapPageState extends State<MapPage>
             ),
           );
         },
-        road: Road(
-          startIcon: MarkerIcon(
-            icon: Icon(
-              Icons.person,
-              size: 80,
-              color: Colors.brown,
-            ),
-          ),
-          roadColor: Colors.red,
-        ),
         markerOption: MarkerOption(
           defaultMarker: MarkerIcon(
             icon: Icon(
-              Icons.location_history_rounded,
-              color: Colors.red,
-              size: 80,
+              loca_icon.icon,
+              color: Colors.deepOrange,
+              size: 90,
             ),
           ),
           advancedPickerMarker: MarkerIcon(
             icon: Icon(
-              Icons.location_searching,
+              loca_icon.icon,
               color: Colors.green,
-              size: 64,
+              size: 90,
             ),
           ),
         ),
@@ -262,8 +207,7 @@ class _MapPageState extends State<MapPage>
                                 mainAxisAlignment:
                                 MainAxisAlignment.center,
                                 children: [
-                                  Spacer(),
-                                  SizedBox(width: size.width/5),
+                                  Spacer()
                                 ]);
                           },
                         ))),
@@ -275,7 +219,6 @@ class _MapPageState extends State<MapPage>
     )
         : Container();
   }
-
 
   showAlertDialog(BuildContext context, String text) {
     final snackBar = SnackBar(
@@ -294,7 +237,6 @@ class _MapPageState extends State<MapPage>
         ));
     ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }
-
 
   String nStringToNNString(String? str) {
     return str ?? "";
