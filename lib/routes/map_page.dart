@@ -1,10 +1,12 @@
 import 'package:background_location/background_location.dart';
 import 'package:flutter_osm_plugin/flutter_osm_plugin.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+
+import 'package:pawgo/assets/custom_colors.dart';
+import 'package:pawgo/models/loggedUser.dart';
 import 'package:pawgo/utils/mobile_library.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:location/location.dart' as loc;
-
 
 extension LocationDataExt on loc.LocationData {
   GeoPoint toGeoPoint() {
@@ -40,12 +42,13 @@ class MapPage extends StatefulWidget {
 class _MapPageState extends State<MapPage>
     with OSMMixinObserver, WidgetsBindingObserver {
   final MapController controller = MapController(initMapWithUserPosition: true);
+  double totalElevation = 0;
   bool _hasPermissions = false;
   bool _isRecording = false;
   bool _shouldInitialize = true;
   FaIcon markerdog = FaIcon(FontAwesomeIcons.dog);
   List<GeoPoint> path = [];
-  RoadInfo? _roadInfo;
+  List<double> elevations = [];
   OSMFlutter? map;
   Location? currentLocation;
 
@@ -64,7 +67,7 @@ class _MapPageState extends State<MapPage>
           controller.changeLocation(location.toGeoPoint());
         });
         setState(() {
-          _shouldInitialize = false;
+          _shouldInitialize = true;
         });
       }
       controller.setZoom(stepZoom: 10.0);
@@ -92,6 +95,10 @@ class _MapPageState extends State<MapPage>
         path.add(GeoPoint(
             latitude: location.latitude!, longitude: location.longitude!));
         double newAltitude = location.altitude!;
+        if (newAltitude > elevations.last) {
+          totalElevation = (totalElevation + (newAltitude - elevations.last));
+          elevations.add(newAltitude);
+        }
         setState(() {});
       }
     }
@@ -111,17 +118,6 @@ class _MapPageState extends State<MapPage>
     controller.dispose();
     WidgetsBinding.instance?.removeObserver(this);
     super.dispose();
-  }
-
-  List<GeoPoint> convertPathList(List<GeoPoint> path) {
-    List<GeoPoint> listToReturn = [];
-
-    for (var point in path) {
-      listToReturn.add(GeoPoint(
-          latitude: point.latitude, longitude: point.longitude));
-    }
-
-    return listToReturn;
   }
 
   @override
@@ -212,8 +208,7 @@ class _MapPageState extends State<MapPage>
                                 mainAxisAlignment:
                                 MainAxisAlignment.center,
                                 children: [
-                                  Spacer(),
-                                  SizedBox(width: size.width/5),
+                                  Spacer()
                                 ]);
                           },
                         )
@@ -227,7 +222,6 @@ class _MapPageState extends State<MapPage>
     )
         : Container();
   }
-
 
   showAlertDialog(BuildContext context, String text) {
     final snackBar = SnackBar(
@@ -246,7 +240,6 @@ class _MapPageState extends State<MapPage>
         ));
     ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }
-
 
   String nStringToNNString(String? str) {
     return str ?? "";
